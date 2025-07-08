@@ -605,7 +605,7 @@ function FinitiveApp() {
     </div>
   );
 }
-
+   
 export default function FinitivePage() {
   return (
     <AuthWrapper>

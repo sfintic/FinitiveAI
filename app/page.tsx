@@ -4,8 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Target, Calendar, CheckCircle, Circle, Clock, Lightbulb, Zap, TrendingUp, Plus } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { supabase } from './lib/supabaseClient';
-import type { User } from '@supabase/supabase-js';
-import AuthWrapper from './components/AuthWrapper';
 
 // Types for Supabase data
 export type Goal = {
@@ -85,10 +83,6 @@ const AnimatedBackground = () => (
 function FinitiveApp() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
-  // Supabase user and loading state
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
   // Goals and tasks from Supabase
   const [goals, setGoals] = useState<Goal[]>([]);
   const [todaysTasks, setTodaysTasks] = useState<Task[]>([]);
@@ -122,33 +116,20 @@ function FinitiveApp() {
   }, []);
 
   useEffect(() => {
-    // Check if user is logged in and load data
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-      if (user) {
-        loadUserData(user.id);
-      }
-      setLoading(false);
+    // Load all goals and tasks (no user gating)
+    const loadData = async () => {
+      const { data: goalsData } = await supabase
+        .from('goals')
+        .select('*');
+      setGoals(goalsData || []);
+
+      const { data: tasksData } = await supabase
+        .from('tasks')
+        .select('*');
+      setTodaysTasks(tasksData || []);
     };
-    getUser();
+    loadData();
   }, []);
-
-  const loadUserData = async (userId: string) => {
-    // Load goals
-    const { data: goalsData } = await supabase
-      .from('goals')
-      .select('*')
-      .eq('user_id', userId);
-    setGoals(goalsData || []);
-
-    // Load tasks
-    const { data: tasksData } = await supabase
-      .from('tasks')
-      .select('*')
-      .eq('user_id', userId);
-    setTodaysTasks(tasksData || []);
-  };
 
   // Confetti celebration function
   const triggerCelebration = () => {
@@ -198,15 +179,8 @@ function FinitiveApp() {
   // Track if confetti has been shown
   const [hasShownConfetti, setHasShownConfetti] = useState(false);
 
-  if (!mounted || loading) {
+  if (!mounted) {
     return null;
-  }
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0b0f1a] text-gray-200">
-        <p>Please log in to view your dashboard.</p>
-      </div>
-    );
   }
 
   const toggleTask = (taskId: number) => {
@@ -240,7 +214,7 @@ function FinitiveApp() {
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-xl border border-cyan-500/20 p-6 shadow-2xl">
         <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-blue-500/10"></div>
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-2 text-gray-100">Good morning, {user?.email || 'User'}! ☀️</h1>
+          <h1 className="text-2xl font-bold mb-2 text-gray-100">Good morning, User! ☀️</h1>
           <p className="text-gray-300">Ready to make today count?</p>
 
           <div className="mt-4 flex items-center gap-4">
@@ -605,11 +579,7 @@ function FinitiveApp() {
     </div>
   );
 }
-   
+
 export default function FinitivePage() {
-  return (
-    <AuthWrapper>
-      <FinitiveApp />
-    </AuthWrapper>
-  );
+  return <FinitiveApp />;
 }

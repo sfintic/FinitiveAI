@@ -4,6 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { Target, Calendar, CheckCircle, Circle, Clock, Lightbulb, Zap, TrendingUp, Plus } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { supabase } from './lib/supabaseClient';
+import { DashboardView } from './components/DashboardView';
+import { GoalsView } from './components/GoalsView';
+import { AiCoachView, AiMessage } from './components/AiCoachView';
+import { AnimatedBackground } from './components/AnimatedBackground';
+import CalendarPage from './calendar/page';
 
 // Types for Supabase data
 export type Goal = {
@@ -28,57 +33,6 @@ export type Task = {
   aiNote?: string;
   user_id: string;
 };
-
-// Animated Background Component with Gears
-const AnimatedBackground = () => (
-  <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-    {/* Gradient Orbs */}
-    <div 
-      className="absolute -top-40 -right-40 w-80 h-80 bg-cyan-500/20 rounded-full blur-3xl animate-pulse"
-      style={{
-        animation: 'float 20s ease-in-out infinite'
-      }}
-    />
-    <div 
-      className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl animate-pulse"
-      style={{
-        animation: 'float 15s ease-in-out infinite reverse'
-      }}
-    />
-    {/* Animated Gears */}
-    <svg className="absolute left-10 top-10 opacity-20" width="80" height="80" viewBox="0 0 80 80">
-      <g className="gear-rotate-slow">
-        <circle cx="40" cy="40" r="30" fill="none" stroke="#00d9ff" strokeWidth="4" />
-        <g>
-          {[...Array(8)].map((_, i) => (
-            <rect key={i} x="38" y="8" width="4" height="12" fill="#00d9ff" transform={`rotate(${i*45} 40 40)`} />
-          ))}
-        </g>
-      </g>
-    </svg>
-    <svg className="absolute right-20 bottom-20 opacity-10" width="60" height="60" viewBox="0 0 60 60">
-      <g className="gear-rotate-fast">
-        <circle cx="30" cy="30" r="20" fill="none" stroke="#40e0d0" strokeWidth="3" />
-        <g>
-          {[...Array(6)].map((_, i) => (
-            <rect key={i} x="28" y="4" width="4" height="8" fill="#40e0d0" transform={`rotate(${i*60} 30 30)`} />
-          ))}
-        </g>
-      </g>
-    </svg>
-    {/* Grid Pattern */}
-    <div className="absolute inset-0 opacity-[0.02]">
-      <svg width="100%" height="100%">
-        <defs>
-          <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
-            <path d="M 50 0 L 0 0 0 50" fill="none" stroke="currentColor" className="text-cyan-400" strokeWidth="1"/>
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" />
-      </svg>
-    </div>
-  </div>
-);
 
 function FinitiveApp() {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -120,12 +74,14 @@ function FinitiveApp() {
     const loadData = async () => {
       const { data: goalsData } = await supabase
         .from('goals')
-        .select('*');
+        .select('*')
+        .eq('deleted', false);
       setGoals(goalsData || []);
 
       const { data: tasksData } = await supabase
         .from('tasks')
-        .select('*');
+        .select('*')
+        .eq('deleted', false);
       setTodaysTasks(tasksData || []);
     };
     loadData();
@@ -179,6 +135,102 @@ function FinitiveApp() {
   // Track if confetti has been shown
   const [hasShownConfetti, setHasShownConfetti] = useState(false);
 
+  // Soft delete (archive) a task
+  const archiveTask = async (taskId: number) => {
+    await supabase
+      .from('tasks')
+      .update({ deleted: true })
+      .eq('id', taskId);
+    // Refresh tasks
+    const { data: tasksData } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('deleted', false);
+    setTodaysTasks(tasksData || []);
+  };
+
+  // Show/hide archived tasks
+  const [showArchived, setShowArchived] = useState(false);
+  const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
+
+  useEffect(() => {
+    if (showArchived) {
+      supabase
+        .from('tasks')
+        .select('*')
+        .eq('deleted', true)
+        .then(({ data }) => setArchivedTasks(data || []));
+    }
+  }, [showArchived]);
+
+  // Restore a task
+  const restoreTask = async (taskId: number) => {
+    await supabase
+      .from('tasks')
+      .update({ deleted: false })
+      .eq('id', taskId);
+    // Refresh archived tasks
+    supabase
+      .from('tasks')
+      .select('*')
+      .eq('deleted', true)
+      .then(({ data }) => setArchivedTasks(data || []));
+    // Refresh active tasks
+    const { data: tasksData } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('deleted', false);
+    setTodaysTasks(tasksData || []);
+  };
+
+  // Soft delete (archive) a goal
+  const archiveGoal = async (goalId: number) => {
+    await supabase
+      .from('goals')
+      .update({ deleted: true })
+      .eq('id', goalId);
+    // Refresh goals
+    const { data: goalsData } = await supabase
+      .from('goals')
+      .select('*')
+      .eq('deleted', false);
+    setGoals(goalsData || []);
+  };
+
+  // Show/hide archived goals
+  const [showArchivedGoals, setShowArchivedGoals] = useState(false);
+  const [archivedGoals, setArchivedGoals] = useState<Goal[]>([]);
+
+  useEffect(() => {
+    if (showArchivedGoals) {
+      supabase
+        .from('goals')
+        .select('*')
+        .eq('deleted', true)
+        .then(({ data }) => setArchivedGoals(data || []));
+    }
+  }, [showArchivedGoals]);
+
+  // Restore a goal
+  const restoreGoal = async (goalId: number) => {
+    await supabase
+      .from('goals')
+      .update({ deleted: false })
+      .eq('id', goalId);
+    // Refresh archived goals
+    supabase
+      .from('goals')
+      .select('*')
+      .eq('deleted', true)
+      .then(({ data }) => setArchivedGoals(data || []));
+    // Refresh active goals
+    const { data: goalsData } = await supabase
+      .from('goals')
+      .select('*')
+      .eq('deleted', false);
+    setGoals(goalsData || []);
+  };
+
   if (!mounted) {
     return null;
   }
@@ -208,249 +260,6 @@ function FinitiveApp() {
   const completedCount = todaysTasks.filter(t => t.completed).length;
   const progressPercent = todaysTasks.length > 0 ? Math.round((completedCount / todaysTasks.length) * 100) : 0;
 
-  const DashboardView = () => (
-    <div className="space-y-6">
-      {/* Header with greeting - Futuristic Style */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-xl border border-cyan-500/20 p-6 shadow-2xl">
-        <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/10 via-transparent to-blue-500/10"></div>
-        <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-2 text-gray-100">Good morning, User! ☀️</h1>
-          <p className="text-gray-300">Ready to make today count?</p>
-
-          <div className="mt-4 flex items-center gap-4">
-            <div className="bg-slate-800/60 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-600/50">
-              <div className="text-sm text-gray-400">Today's Progress</div>
-              <div className="text-xl font-bold text-cyan-400">{completedCount}/{todaysTasks.length}</div>
-            </div>
-            <div className="bg-slate-800/60 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-600/50">
-              <div className="text-sm text-gray-400">Streak</div>
-              <div className="text-xl font-bold text-cyan-400">—</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* AI Insights - Futuristic */}
-      <div className="bg-slate-900/90 backdrop-blur-xl border border-cyan-400/20 shadow-xl rounded-xl p-4 hover:shadow-cyan-400/10 transition-all duration-300">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-full bg-cyan-400/10 border border-cyan-400/20">
-            <Lightbulb className="w-5 h-5 text-cyan-400" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-cyan-300 mb-1">AI Insight</h3>
-            <p className="text-gray-300 text-sm">You're crushing your morning tasks this week! I've noticed you work best between 9-11am. Want me to schedule more important tasks during this time?</p>
-            <button className="mt-2 text-sm bg-cyan-400 text-slate-900 px-3 py-1 rounded-lg hover:bg-cyan-300 transition-all duration-200 font-medium">
-              Yes, optimize my schedule
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Today's Tasks - Futuristic */}
-      <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-xl p-6 shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-100">Today's Focus</h2>
-          <div className="text-sm text-cyan-400 font-medium">{progressPercent}% complete</div>
-        </div>
-        
-        <div className="w-full bg-slate-800/50 rounded-full h-2 mb-6 overflow-hidden">
-          <div 
-            className="bg-gradient-to-r from-cyan-400 to-blue-400 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
-          ></div>
-        </div>
-
-        <div className="space-y-3">
-          {todaysTasks.map(task => (
-            <div key={task.id} className="bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 rounded-lg p-3 hover:bg-slate-800/80 hover:border-cyan-400/30 transition-all duration-200">
-              <div className="flex items-start gap-3">
-                <button
-                  onClick={() => toggleTask(task.id)}
-                  className="mt-1 flex-shrink-0"
-                >
-                  {task.completed ? (
-                    <CheckCircle className="w-5 h-5 text-cyan-400" />
-                  ) : (
-                    <Circle className="w-5 h-5 text-gray-500 hover:text-cyan-400" />
-                  )}
-                </button>
-                
-                <div className="flex-1 min-w-0">
-                  <p className={`font-medium ${task.completed ? 'line-through text-gray-500' : 'text-gray-200'}`}>
-                    {task.text}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-500 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {task.timeEstimate}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {goals.find(g => g.id === task.goalId)?.title}
-                    </span>
-                  </div>
-                  {task.aiNote && (
-                    <p className="text-xs text-gray-400 mt-1 italic">💡 {task.aiNote}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Celebration message */}
-        {progressPercent === 100 && (
-          <div className="mb-4 p-4 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-lg border border-cyan-400/30">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">🎉</span>
-                <p className="text-cyan-300 font-medium">System Synced! All tasks completed!</p>
-                <span className="text-2xl">🚀</span>
-              </div>
-              <button 
-                onClick={triggerCelebration}
-                className="text-xs bg-cyan-400/20 hover:bg-cyan-400/30 text-cyan-300 px-3 py-1 rounded-md transition-colors"
-              >
-                🎊 Celebrate Again
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Goals Overview - Futuristic */}
-      <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-xl p-6 shadow-xl">
-        <h2 className="text-xl font-bold text-gray-100 mb-4">Active Goals</h2>
-        <div className="space-y-4">
-          {goals.map(goal => (
-            <div key={goal.id} className="border border-slate-700/50 rounded-lg p-4 bg-slate-800/30 hover:bg-slate-800/50 transition-all duration-200">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-gray-200">{goal.title}</h3>
-                <span className="text-sm text-gray-400">{goal.daysLeft} days left</span>
-              </div>
-              
-              <div className="w-full bg-slate-800/50 rounded-full h-2 mb-2">
-                <div 
-                  className="bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full"
-                  style={{ width: `${goal.progress}%` }}
-                ></div>
-              </div>
-              
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-400">{goal.currentPhase}</span>
-                <span className="text-cyan-400 font-medium">{goal.progress}%</span>
-              </div>
-              
-              <p className="text-xs text-gray-500 mt-2">Next: {goal.nextMilestone}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const GoalsView = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-100">Your Goals</h1>
-        <button className="bg-cyan-400 text-slate-900 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-cyan-300 transition-all duration-200 font-medium">
-          <Plus className="w-4 h-4" />
-          New Goal
-        </button>
-      </div>
-
-      {goals.map(goal => (
-        <div key={goal.id} className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-xl p-6 shadow-xl">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-gray-100 mb-1">{goal.title}</h2>
-              <p className="text-gray-400">{goal.timeline} timeline • {goal.category}</p>
-            </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-cyan-400">{goal.progress}%</div>
-              <div className="text-sm text-gray-500">complete</div>
-            </div>
-          </div>
-
-          <div className="w-full bg-slate-800/50 rounded-full h-3 mb-4">
-            <div 
-              className="bg-gradient-to-r from-cyan-400 to-blue-400 h-3 rounded-full"
-              style={{ width: `${goal.progress}%` }}
-            ></div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div className="bg-cyan-400/10 border border-cyan-400/20 p-3 rounded-lg">
-              <h4 className="font-semibold text-cyan-300 mb-1">Current Phase</h4>
-              <p className="text-gray-300 text-sm">{goal.currentPhase}</p>
-            </div>
-            <div className="bg-blue-400/10 border border-blue-400/20 p-3 rounded-lg">
-              <h4 className="font-semibold text-blue-300 mb-1">Next Milestone</h4>
-              <p className="text-gray-300 text-sm">{goal.nextMilestone}</p>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button className="bg-cyan-400 text-slate-900 px-4 py-2 rounded-lg hover:bg-cyan-300 transition-all duration-200 text-sm font-medium">
-              View Breakdown
-            </button>
-            <button className="border border-cyan-400/30 text-cyan-400 px-4 py-2 rounded-lg hover:bg-cyan-400/10 text-sm transition-all duration-200">
-              Adjust Timeline
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-
-  const AiCoachView = () => (
-    <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-900/20 to-pink-900/20 backdrop-blur-xl border border-purple-500/30 p-6">
-        <div className="absolute inset-0 bg-gradient-to-tr from-purple-500/10 via-transparent to-pink-500/10"></div>
-        <div className="relative z-10">
-          <h1 className="text-2xl font-bold mb-2 text-gray-100">AI Coach 🤖</h1>
-          <p className="text-purple-200">Your personal success strategist, here to help you navigate challenges and celebrate wins.</p>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        {aiMessages.map(message => (
-          <div key={message.id} className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 rounded-xl p-4 hover:shadow-lg hover:shadow-cyan-400/10 transition-all duration-300">
-            <div className="flex items-start gap-3">
-              <div className={`p-2 rounded-full ${
-                message.type === 'motivation' ? 'bg-green-400/20' :
-                message.type === 'adjustment' ? 'bg-yellow-400/20' : 'bg-blue-400/20'
-              }`}>
-                {message.type === 'motivation' ? <Zap className="w-4 h-4 text-green-400" /> :
-                 message.type === 'adjustment' ? <TrendingUp className="w-4 h-4 text-yellow-400" /> :
-                 <Target className="w-4 h-4 text-blue-400" />}
-              </div>
-              
-              <div className="flex-1">
-                <p className="text-gray-200 mb-2">{message.message}</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">{message.timestamp}</span>
-                  {message.hasAction && (
-                    <button className="bg-purple-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-purple-400 transition-all duration-200">
-                      {message.actionText}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="bg-slate-900/90 backdrop-blur-xl border-2 border-dashed border-slate-600 rounded-xl p-6 text-center hover:border-cyan-400/50 transition-colors duration-300">
-        <h3 className="font-semibold text-gray-200 mb-2">Need guidance?</h3>
-        <p className="text-gray-400 text-sm mb-4">Ask your AI coach anything about your goals, productivity, or motivation.</p>
-        <button className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg hover:from-purple-400 hover:to-pink-400 transition-all duration-200">
-          Start Conversation
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-[#0b0f1a]">
       {/* Animated Background Effects */}
@@ -477,6 +286,14 @@ function FinitiveApp() {
                   Today
                 </button>
                 <button
+                  onClick={() => setCurrentView('calendar')}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
+                    currentView === 'calendar' ? 'bg-cyan-400 text-slate-900' : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Calendar
+                </button>
+                <button
                   onClick={() => setCurrentView('goals')}
                   className={`px-3 py-1 rounded-lg text-sm font-medium transition-all duration-200 ${
                     currentView === 'goals' ? 'bg-cyan-400 text-slate-900' : 'text-gray-400 hover:text-gray-200'
@@ -499,9 +316,33 @@ function FinitiveApp() {
 
         {/* Main Content */}
         <div className="px-4 py-6 pb-24 md:pb-6">
-          {currentView === 'dashboard' && <DashboardView />}
-          {currentView === 'goals' && <GoalsView />}
-          {currentView === 'coach' && <AiCoachView />}
+          {currentView === 'dashboard' && (
+            <DashboardView
+              goals={goals}
+              todaysTasks={todaysTasks}
+              completedCount={completedCount}
+              progressPercent={progressPercent}
+              toggleTask={toggleTask}
+              triggerCelebration={triggerCelebration}
+              archiveTask={archiveTask}
+              restoreTask={restoreTask}
+              showArchived={showArchived}
+              setShowArchived={setShowArchived}
+              archivedTasks={archivedTasks}
+            />
+          )}
+          {currentView === 'calendar' && <CalendarPage />}
+          {currentView === 'goals' && (
+            <GoalsView
+              goals={goals}
+              archiveGoal={archiveGoal}
+              restoreGoal={restoreGoal}
+              showArchivedGoals={showArchivedGoals}
+              setShowArchivedGoals={setShowArchivedGoals}
+              archivedGoals={archivedGoals}
+            />
+          )}
+          {currentView === 'coach' && <AiCoachView aiMessages={aiMessages as AiMessage[]} />}
         </div>
 
         {/* Bottom Navigation - Mobile Futuristic */}
@@ -515,6 +356,15 @@ function FinitiveApp() {
             >
               <Calendar className="w-5 h-5" />
               <span className="text-xs">Today</span>
+            </button>
+            <button
+              onClick={() => setCurrentView('calendar')}
+              className={`flex flex-col items-center gap-1 transition-all duration-200 ${
+                currentView === 'calendar' ? 'text-cyan-400' : 'text-gray-500'
+              }`}
+            >
+              <Clock className="w-5 h-5" />
+              <span className="text-xs">Calendar</span>
             </button>
             <button
               onClick={() => setCurrentView('goals')}

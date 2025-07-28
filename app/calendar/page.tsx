@@ -604,9 +604,28 @@ export default function EnhancedCalendarPage() {
                 transition: all 0.2s ease;
               }
               
+              .fc-day-today {
+                background: transparent !important;
+                outline: 2px solid #06b6d4 !important;
+                outline-offset: -2px !important;
+                position: relative !important;
+              }
+              
+              .fc-day-today::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                border: 2px solid #06b6d4;
+                pointer-events: none;
+                z-index: 1;
+              }
+              
               .fc-day-today .fc-daygrid-day-number {
-                background: linear-gradient(135deg, #06b6d4, #3b82f6);
-                color: white;
+                background: transparent;
+                color: #06b6d4;
                 font-weight: 600;
               }
               
